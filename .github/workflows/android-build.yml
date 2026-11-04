@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          ZIP="$GITHUB_WORKSPACE/SocialMediaPublisherPRO_Email_Login_v3_AUDITED.zip"
+          SocialMediaPublisherPRO_Email_Login_v3_LOGIN_PATCHED.zip"
 
           if [ ! -f "$ZIP" ]; then
             echo "::error::V3 Project ZIP not found: $ZIP"
