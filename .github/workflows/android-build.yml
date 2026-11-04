@@ -1,124 +1,128 @@
-
 name: Social Media Publisher PRO - V3 APK Build
 
-"on":
-  workflow_dispatch:
-  push:
-    branches:
-      - main
+on:
+workflow_dispatch:
+push:
+branches:
+- main
 
 permissions:
-  contents: read
+contents: read
 
 jobs:
-  build:
-    name: Build Android APK
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+build:
+name: Build Android APK
+runs-on: ubuntu-latest
+timeout-minutes: 45
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+steps:
+  - name: Checkout Repository
+    uses: actions/checkout@v4
 
-      - name: Extract V3 Android Project ZIP
-        shell: bash
-        run: |
-          set -euo pipefail
+  - name: Extract V3 Android Project ZIP
+    shell: bash
+    run: |
+      set -euo pipefail
 
-          SocialMediaPublisherPRO_Email_Login_v3_LOGIN_PATCHED.zip"
+      ZIP="SocialMediaPublisherPRO_Email_Login_v3_LOGIN_PATCHED.zip"
 
-          if [ ! -f "$ZIP" ]; then
-            echo "::error::V3 Project ZIP not found: $ZIP"
-            ls -lah "$GITHUB_WORKSPACE"
-            exit 1
-          fi
+      if [ ! -f "$ZIP" ]; then
+        echo "::error::V3 Project ZIP not found: $ZIP"
+        ls -lah "$GITHUB_WORKSPACE"
+        exit 1
+      fi
 
-          DEST="$RUNNER_TEMP/android-source"
-          mkdir -p "$DEST"
+      DEST="$RUNNER_TEMP/android-source"
+      mkdir -p "$DEST"
 
-          unzip -q "$ZIP" -d "$DEST"
+      unzip -q "$ZIP" -d "$DEST"
 
-          SETTINGS="$(find "$DEST" -type f -name settings.gradle.kts -print -quit)"
+      SETTINGS="$(find "$DEST" -type f -name settings.gradle.kts -print -quit)"
 
-          if [ -z "$SETTINGS" ]; then
-            echo "::error::settings.gradle.kts not found inside V3 ZIP"
-            find "$DEST" -maxdepth 5 -type f
-            exit 1
-          fi
+      if [ -z "$SETTINGS" ]; then
+        echo "::error::settings.gradle.kts not found inside V3 ZIP"
+        find "$DEST" -maxdepth 5 -type f
+        exit 1
+      fi
 
-          PROJECT="$(dirname "$SETTINGS")"
+      PROJECT="$(dirname "$SETTINGS")"
+      echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
 
-          echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
+      echo "V3 Android project extracted successfully."
+      echo "Project: $PROJECT"
 
-          echo "V3 Android project extracted successfully."
-          echo "Project: $PROJECT"
+  - name: Verify Android Source
+    shell: bash
+    run: |
+      set -euo pipefail
+      cd "$PROJECT_DIR"
 
-      - name: Verify Android Source
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$PROJECT_DIR"
+      test -f settings.gradle.kts
+      test -f app/build.gradle.kts
+      test -f app/src/main/AndroidManifest.xml
+      test -f app/src/main/java/com/socialpublisher/pro/MainActivity.kt
+      test -f app/src/main/java/com/socialpublisher/pro/AuthRepository.kt
 
-          test -f settings.gradle.kts
-          test -f app/build.gradle.kts
-          test -f app/src/main/AndroidManifest.xml
-          test -f app/src/main/java/com/socialpublisher/pro/MainActivity.kt
-          test -f app/src/main/java/com/socialpublisher/pro/AuthRepository.kt
+      echo "V3 Android source verified."
 
-          echo "V3 Android source verified."
+  - name: Setup Java 17
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: "17"
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
+  - name: Setup Gradle 8.11.1
+    uses: gradle/actions/setup-gradle@v4
+    with:
+      gradle-version: "8.11.1"
 
-      - name: Setup Gradle 8.11.1
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.11.1"
+  - name: Setup Android SDK
+    uses: android-actions/setup-android@v3
+    with:
+      packages: platform-tools
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
+  - name: Install Android SDK 36
+    shell: bash
+    run: |
+      set -euo pipefail
 
-      - name: Install Android SDK 36
-        shell: bash
-        run: |
-          set -euo pipefail
-          sdkmanager --install \
-            "platforms;android-36" \
-            "build-tools;36.0.0"
+      yes | sdkmanager --licenses >/dev/null || true
 
-      - name: Build Debug APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$PROJECT_DIR"
-          gradle --no-daemon --stacktrace clean assembleDebug
+      sdkmanager --install \
+        "platforms;android-36" \
+        "build-tools;36.0.0"
 
-      - name: Verify APK
-        shell: bash
-        run: |
-          set -euo pipefail
+  - name: Build Debug APK
+    shell: bash
+    run: |
+      set -euo pipefail
+      cd "$PROJECT_DIR"
 
-          APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
+      gradle --no-daemon --stacktrace clean assembleDebug
 
-          if [ ! -s "$APK" ]; then
-            echo "::error::APK was not generated"
-            exit 1
-          fi
+  - name: Verify APK
+    shell: bash
+    run: |
+      set -euo pipefail
 
-          mkdir -p "$GITHUB_WORKSPACE/apk-output"
-          cp "$APK" "$GITHUB_WORKSPACE/apk-output/SocialMediaPublisherPRO_V3.apk"
+      APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
 
-          ls -lh "$GITHUB_WORKSPACE/apk-output"
+      if [ ! -s "$APK" ]; then
+        echo "::error::APK was not generated"
+        exit 1
+      fi
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SocialMediaPublisherPRO-V3-Debug-APK
-          path: apk-output/SocialMediaPublisherPRO_V3.apk
-          if-no-files-found: error
-          retention-days: 14
+      mkdir -p "$GITHUB_WORKSPACE/apk-output"
+
+      cp "$APK" \
+        "$GITHUB_WORKSPACE/apk-output/SocialMediaPublisherPRO_V3.apk"
+
+      ls -lh "$GITHUB_WORKSPACE/apk-output"
+
+  - name: Upload APK Artifact
+    uses: actions/upload-artifact@v4
+    with:
+      name: SocialMediaPublisherPRO-V3-Debug-APK
+      path: apk-output/SocialMediaPublisherPRO_V3.apk
+      if-no-files-found: error
+      retention-days: 14
