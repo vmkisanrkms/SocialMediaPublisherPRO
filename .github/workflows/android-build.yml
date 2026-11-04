@@ -1,4 +1,5 @@
-name: Social Media Publisher PRO Android Build
+
+name: Social Media Publisher PRO - APK Build
 
 "on":
   workflow_dispatch:
@@ -16,14 +17,49 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Checkout Source
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Show Repository Structure
+      - name: Extract Android Project ZIP
+        shell: bash
         run: |
-          pwd
-          ls -la
-          find . -maxdepth 3 -name settings.gradle.kts
+          set -euo pipefail
+
+          ZIP="SocialMediaPublisherPRO_WITH_APP_ICON.zip"
+
+          if [ ! -f "$ZIP" ]; then
+            echo "::error::Project ZIP not found: $ZIP"
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/android-source"
+          unzip -q "$ZIP" -d "$RUNNER_TEMP/android-source"
+
+          PROJECT="$RUNNER_TEMP/android-source/SocialMediaPublisherPRO"
+
+          if [ ! -f "$PROJECT/settings.gradle.kts" ]; then
+            echo "::error::Android project not found inside ZIP"
+            find "$RUNNER_TEMP/android-source" -maxdepth 4 -type f
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
+          echo "Android project extracted successfully."
+
+      - name: Verify Android Source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+
+          test -f settings.gradle.kts
+          test -f build.gradle.kts
+          test -f app/build.gradle.kts
+          test -f app/src/main/AndroidManifest.xml
+          test -f app/src/main/java/com/socialpublisher/pro/MainActivity.kt
+          test -f app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+          echo "Source files and app icon verified."
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -31,7 +67,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle
+      - name: Setup Gradle 8.11.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
@@ -41,35 +77,42 @@ jobs:
         with:
           packages: platform-tools
 
-      - name: Install SDK 36
+      - name: Install Android SDK 36
+        shell: bash
         run: |
+          set -euo pipefail
           sdkmanager --install \
             "platforms;android-36" \
             "build-tools;36.0.0"
 
-      - name: Verify Project Files
-        working-directory: SocialMediaPublisherPRO
-        run: |
-          test -f settings.gradle.kts
-          test -f build.gradle.kts
-          test -f app/build.gradle.kts
-          test -f app/src/main/AndroidManifest.xml
-          test -f app/src/main/java/com/socialpublisher/pro/MainActivity.kt
-          echo "All project files verified."
-
       - name: Build Debug APK
-        working-directory: SocialMediaPublisherPRO
-        run: gradle --no-daemon clean assembleDebug
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          gradle --no-daemon --stacktrace clean assembleDebug
 
       - name: Verify APK
+        shell: bash
         run: |
-          test -s SocialMediaPublisherPRO/app/build/outputs/apk/debug/app-debug.apk
-          ls -lh SocialMediaPublisherPRO/app/build/outputs/apk/debug/app-debug.apk
+          set -euo pipefail
 
-      - name: Upload APK
+          APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ ! -s "$APK" ]; then
+            echo "::error::APK was not generated"
+            exit 1
+          fi
+
+          mkdir -p "$GITHUB_WORKSPACE/apk-output"
+          cp "$APK" "$GITHUB_WORKSPACE/apk-output/SocialMediaPublisherPRO.apk"
+
+          ls -lh "$GITHUB_WORKSPACE/apk-output"
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SocialMediaPublisherPRO-APK
-          path: SocialMediaPublisherPRO/app/build/outputs/apk/debug/app-debug.apk
+          name: SocialMediaPublisherPRO-Debug-APK
+          path: apk-output/SocialMediaPublisherPRO.apk
           if-no-files-found: error
           retention-days: 14
