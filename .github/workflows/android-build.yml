@@ -1,77 +1,48 @@
+set -e
 
-name: Social Media Publisher PRO - Android Build
+# Repository check
+if [ ! -d ".git" ]; then
+  echo "ERROR: GitHub repository folder mein nahi hain."
+  exit 1
+fi
 
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - 'app/**'
-      - '*.gradle.kts'
-      - 'gradle.properties'
-      - '.github/workflows/android-build.yml'
+# ZIP check
+ZIP="SocialMediaPublisherPRO_WITH_APP_ICON.zip"
 
-permissions:
-  contents: read
+if [ ! -f "$ZIP" ]; then
+  echo "ERROR: Updated ZIP pehle repository mein upload karein."
+  exit 1
+fi
 
-concurrency:
-  group: android-build-${{ github.ref }}
-  cancel-in-progress: true
+# Extract updated project
+mkdir -p /tmp/socialpublisher_update
+unzip -oq "$ZIP" -d /tmp/socialpublisher_update
 
-jobs:
-  build:
-    name: Build Android APK
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+SRC="/tmp/socialpublisher_update/SocialMediaPublisherPRO"
 
-    steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
+if [ ! -d "$SRC/app" ]; then
+  echo "ERROR: Android source files nahi mile."
+  exit 1
+fi
 
-      - name: Setup JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+# Copy project files without replacing Git metadata
+cp -a "$SRC/." .
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.11.1'
+# Check launcher icon
+test -f app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+test -f app/src/main/AndroidManifest.xml
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+# Git configuration
+git config user.name "SocialMediaPublisherPRO"
+git config user.email "actions@users.noreply.github.com"
 
-      - name: Install Android SDK Components
-        run: |
-          yes | sdkmanager --licenses
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.0.0"
+# Commit and push
+git add .
+git commit -m "Add complete Android source and professional app icon" || {
+  echo "No new changes to commit."
+}
 
-      - name: Verify Project Files
-        run: |
-          test -f settings.gradle.kts
-          test -f build.gradle.kts
-          test -f app/build.gradle.kts
-          test -f app/src/main/AndroidManifest.xml
-          test -f app/src/main/java/com/socialpublisher/pro/MainActivity.kt
+git push origin main
 
-      - name: Build Debug APK
-        run: gradle --no-daemon clean assembleDebug
-
-      - name: Verify APK
-        run: |
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          test -s "$APK"
-          ls -lh "$APK"
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SocialMediaPublisherPRO-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 14
+echo "SUCCESS: Project uploaded to GitHub."
+echo "Now open Actions and run Android Build."
