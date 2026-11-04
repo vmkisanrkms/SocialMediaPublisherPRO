@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          ZIP="SocialMediaPublisherPRO_WITH_APP_ICON.zip"
+          SocialMediaPublisherPRO_Email_Login_v3_AUDITED.zip"
 
           if [ ! -f "$ZIP" ]; then
             echo "::error::Project ZIP not found: $ZIP"
